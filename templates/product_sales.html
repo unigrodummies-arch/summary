@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Product Sales Report</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { background-color: #f4f6f9; padding: 20px; font-family: 'Segoe UI', sans-serif; }
+        .card-custom { background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding: 15px; border: none; }
+        th { font-size: 0.8rem; white-space: nowrap; }
+        td { font-size: 0.8rem; vertical-align: middle; }
+        
+        /* Sticky Header */
+        thead { position: sticky; top: 0; z-index: 10; }
+        
+        /* Pagination Controls */
+        .page-btn { cursor: pointer; user-select: none; }
+        .page-btn.disabled { opacity: 0.5; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid" style="max-width: 1600px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <a href="/reports" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i> Back</a>
+            <h4 class="d-inline-block align-middle text-secondary ms-2 m-0">Product Sales Report</h4>
+        </div>
+        <button class="btn btn-success btn-sm fw-bold" onclick="exportToExcel()">
+            <i class="fas fa-file-excel me-1"></i> Export All Data
+        </button>
+    </div>
+
+    <div class="card-custom mb-3">
+        <div class="row g-2 align-items-center mb-3 pb-3 border-bottom">
+            <div class="col-auto">
+                <span class="small fw-bold text-primary"><i class="fas fa-calendar-alt me-1"></i> Quick Filter:</span>
+            </div>
+            <div class="col-md-2">
+                <select id="qMonth" class="form-select form-select-sm fw-bold text-secondary">
+                    <option value="0">January</option>
+                    <option value="1">February</option>
+                    <option value="2">March</option>
+                    <option value="3">April</option>
+                    <option value="4">May</option>
+                    <option value="5">June</option>
+                    <option value="6">July</option>
+                    <option value="7">August</option>
+                    <option value="8">September</option>
+                    <option value="9">October</option>
+                    <option value="10">November</option>
+                    <option value="11">December</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <input type="number" id="qYear" class="form-control form-control-sm fw-bold text-secondary" placeholder="Year">
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-outline-primary btn-sm w-100 fw-bold" onclick="applyQuickDate()">
+                    <i class="fas fa-check-circle me-1"></i> Set Range
+                </button>
+            </div>
+        </div>
+
+        <form id="filterForm" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="small fw-bold text-muted">Start Date</label>
+                <input type="date" id="startDate" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+                <label class="small fw-bold text-muted">End Date</label>
+                <input type="date" id="endDate" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">
+                    <i class="fas fa-bolt me-1"></i> Generate
+                </button>
+            </div>
+            
+            <div class="col-md-6 text-end d-none" id="paginationControls">
+                <span class="small text-muted me-2" id="pageInfo">Showing 0-0 of 0</span>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary" onclick="changePage(-1)"><i class="fas fa-chevron-left"></i></button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="changePage(1)"><i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="card-custom">
+        <div class="table-responsive" style="max-height: 72vh;">
+            <table class="table table-hover table-bordered table-striped mb-0 table-sm" id="salesTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Barcode</th>
+                        <th>Int. Ref</th>
+                        <th>Product Name</th>
+                        <th>Vendor</th>
+                        <th class="text-end">Cost</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Sold Qty</th>
+                        <th class="text-end">Sales Value</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="8" class="text-center text-muted py-4">Select dates and click Generate</td></tr>
+                </tbody>
+                <tfoot class="table-light fw-bold" style="position: sticky; bottom: 0;">
+                    <tr>
+                        <td colspan="6" class="text-end">GRAND TOTALS (All Pages):</td>
+                        <td class="text-end" id="totalQty">0</td>
+                        <td class="text-end" id="totalVal">0.00</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<div id="loading" class="position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-75 d-none d-flex justify-content-center align-items-center" style="z-index: 2000;">
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 fw-bold text-primary">Loading Data...</p>
+    </div>
+</div>
+
+<script>
+    // --- GLOBAL VARIABLES ---
+    let allData = [];
+    let currentPage = 1;
+    const ROWS_PER_PAGE = 500; // Limits rendering to avoid freeze
+
+    // --- INITIALIZATION ---
+    const d = new Date();
+    document.getElementById('qYear').value = d.getFullYear();
+    document.getElementById('qMonth').value = d.getMonth();
+    setDatesFromMonth(d.getFullYear(), d.getMonth());
+
+    function formatMoney(n) { return parseFloat(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+    // --- QUICK FILTER LOGIC ---
+    function applyQuickDate() {
+        const y = parseInt(document.getElementById('qYear').value);
+        const m = parseInt(document.getElementById('qMonth').value);
+        setDatesFromMonth(y, m);
+    }
+
+    function setDatesFromMonth(year, month) {
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        
+        const fmt = (date) => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
+
+        document.getElementById('startDate').value = fmt(firstDay);
+        document.getElementById('endDate').value = fmt(lastDay);
+    }
+
+    // --- REPORT GENERATION ---
+    document.getElementById('filterForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        
+        document.getElementById('loading').classList.remove('d-none');
+        document.getElementById('paginationControls').classList.add('d-none');
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        try {
+            const res = await fetch('/api/product_sales_report', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ start: start, end: end })
+            });
+            const data = await res.json();
+
+            if(!data.success) {
+                alert("Error: " + data.error);
+                return;
+            }
+
+            // Store data globally
+            allData = data.report;
+            currentPage = 1;
+
+            if(allData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No sales found in this period.</td></tr>';
+                document.getElementById('totalQty').innerText = "0";
+                document.getElementById('totalVal').innerText = "0.00";
+            } else {
+                calculateTotals();
+                renderTable();
+                document.getElementById('paginationControls').classList.remove('d-none');
+            }
+
+        } catch(err) {
+            console.error(err);
+            alert("Connection Failed");
+        } finally {
+            document.getElementById('loading').classList.add('d-none');
+        }
+    });
+
+    function calculateTotals() {
+        let sumQty = 0, sumVal = 0;
+        allData.forEach(r => {
+            sumQty += r.qty;
+            sumVal += r.sales_value;
+        });
+        document.getElementById('totalQty').innerText = sumQty.toLocaleString();
+        document.getElementById('totalVal').innerText = formatMoney(sumVal);
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('tableBody');
+        const startIdx = (currentPage - 1) * ROWS_PER_PAGE;
+        const endIdx = startIdx + ROWS_PER_PAGE;
+        const pageData = allData.slice(startIdx, endIdx);
+
+        let html = '';
+        pageData.forEach(row => {
+            html += `
+                <tr>
+                    <td class="font-monospace small">${row.barcode}</td>
+                    <td class="font-monospace small">${row.ref}</td>
+                    <td class="fw-bold text-truncate" style="max-width: 300px;" title="${row.name}">${row.name}</td>
+                    <td class="small text-muted text-truncate" style="max-width: 150px;">${row.vendor}</td>
+                    <td class="text-end">${formatMoney(row.cost)}</td>
+                    <td class="text-end">${formatMoney(row.price)}</td>
+                    <td class="text-end fw-bold">${row.qty.toLocaleString()}</td>
+                    <td class="text-end fw-bold text-success">${formatMoney(row.sales_value)}</td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+
+        // Update Page Info
+        const totalRows = allData.length;
+        const showingEnd = Math.min(endIdx, totalRows);
+        document.getElementById('pageInfo').innerText = `Showing ${startIdx + 1}-${showingEnd} of ${totalRows}`;
+    }
+
+    function changePage(dir) {
+        const totalPages = Math.ceil(allData.length / ROWS_PER_PAGE);
+        const newPage = currentPage + dir;
+        if(newPage >= 1 && newPage <= totalPages) {
+            currentPage = newPage;
+            renderTable();
+            // Scroll to top of table
+            document.querySelector('.table-responsive').scrollTop = 0;
+        }
+    }
+
+    // Export ALL Data (not just visible page)
+    function exportToExcel() {
+        if(allData.length === 0) { alert("No data to export"); return; }
+        
+        // Prepare data for Excel
+        const exportData = allData.map(row => ({
+            "Barcode": row.barcode,
+            "Int. Ref": row.ref,
+            "Product Name": row.name,
+            "Vendor": row.vendor,
+            "Cost": row.cost,
+            "Price": row.price,
+            "Sold Qty": row.qty,
+            "Sales Value": row.sales_value
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Report");
+        
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        XLSX.writeFile(workbook, `Product_Sales_${start}_to_${end}.xlsx`);
+    }
+</script>
+</body>
+</html>

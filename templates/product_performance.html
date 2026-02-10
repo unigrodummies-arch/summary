@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Product Performance Report</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { background-color: #f4f6f9; padding: 20px; font-family: 'Segoe UI', sans-serif; }
+        .card-custom { background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding: 15px; border: none; }
+        th { font-size: 0.8rem; white-space: nowrap; }
+        td { font-size: 0.8rem; vertical-align: middle; }
+        
+        /* Sticky Header & Footer */
+        thead { position: sticky; top: 0; z-index: 10; }
+        tfoot { position: sticky; bottom: 0; z-index: 10; }
+        tfoot td { background-color: #212529 !important; color: white !important; font-weight: bold; font-size: 0.85rem; border-top: 2px solid #444; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid" style="max-width: 1800px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <a href="/reports" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i> Back</a>
+            <h4 class="d-inline-block align-middle text-secondary ms-2 m-0">Product Performance Report</h4>
+        </div>
+        <button class="btn btn-success btn-sm fw-bold" onclick="exportToExcel()">
+            <i class="fas fa-file-excel me-1"></i> Export Excel
+        </button>
+    </div>
+
+    <div class="card-custom mb-3">
+        <div class="row g-2 align-items-center mb-3 pb-3 border-bottom">
+            <div class="col-auto">
+                <span class="small fw-bold text-primary"><i class="fas fa-calendar-alt me-1"></i> Quick Filter:</span>
+            </div>
+            <div class="col-md-2">
+                <select id="qMonth" class="form-select form-select-sm fw-bold text-secondary">
+                    <option value="0">January</option>
+                    <option value="1">February</option>
+                    <option value="2">March</option>
+                    <option value="3">April</option>
+                    <option value="4">May</option>
+                    <option value="5">June</option>
+                    <option value="6">July</option>
+                    <option value="7">August</option>
+                    <option value="8">September</option>
+                    <option value="9">October</option>
+                    <option value="10">November</option>
+                    <option value="11">December</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <input type="number" id="qYear" class="form-control form-control-sm fw-bold text-secondary" placeholder="Year">
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-outline-primary btn-sm w-100 fw-bold" onclick="applyQuickDate()">
+                    <i class="fas fa-check-circle me-1"></i> Set Range
+                </button>
+            </div>
+        </div>
+
+        <form id="filterForm" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="small fw-bold text-muted">Start Date</label>
+                <input type="date" id="startDate" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+                <label class="small fw-bold text-muted">End Date</label>
+                <input type="date" id="endDate" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">
+                    <i class="fas fa-sync-alt me-1"></i> Generate
+                </button>
+            </div>
+            <div class="col-md-6 text-end">
+                <small class="text-muted fst-italic">Note: Date range applies to Sales & Purchases. Stock is current.</small>
+            </div>
+        </form>
+    </div>
+
+    <div class="card-custom">
+        <div class="table-responsive" style="max-height: 80vh;">
+            <table class="table table-hover table-bordered table-striped mb-0 table-sm" id="perfTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th colspan="6" class="text-center border-bottom border-secondary">Product Details</th>
+                        <th colspan="3" class="text-center border-bottom border-secondary bg-secondary">Procurement (Qty)</th>
+                        <th colspan="2" class="text-center border-bottom border-secondary bg-primary">Sales</th>
+                        <th class="text-center border-bottom border-secondary bg-success">Status</th>
+                    </tr>
+                    <tr>
+                        <th>Barcode</th>
+                        <th>Int. Ref</th>
+                        <th>Name</th>
+                        <th>Vendor</th>
+                        <th class="text-end">Cost</th>
+                        <th class="text-end">Price</th>
+                        
+                        <th class="text-end bg-secondary text-white">Pur. Qty</th>
+                        <th class="text-end bg-secondary text-white">Ret. Qty</th>
+                        <th class="text-end bg-secondary text-white fw-bold">Net Pur.</th>
+                        
+                        <th class="text-end bg-primary text-white">Sold Qty</th>
+                        <th class="text-end bg-primary text-white">Sales Val</th>
+                        
+                        <th class="text-end bg-success text-white fw-bold">On Hand</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="12" class="text-center text-muted py-5">Set date range and click Generate</td></tr>
+                </tbody>
+                <tfoot id="perfFooter">
+                    <tr>
+                        <td colspan="6" class="text-end">TOTALS:</td>
+                        <td class="text-end" id="sumPur">-</td>
+                        <td class="text-end" id="sumRet">-</td>
+                        <td class="text-end" id="sumNet">-</td>
+                        <td class="text-end" id="sumSold">-</td>
+                        <td class="text-end" id="sumVal">-</td>
+                        <td class="text-end" id="sumHand">-</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<div id="loading" class="position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-75 d-none d-flex justify-content-center align-items-center" style="z-index: 2000;">
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 fw-bold text-primary">Crunching Numbers...</p>
+    </div>
+</div>
+
+<script>
+    // --- INITIALIZATION ---
+    const d = new Date();
+    // Default to current month/year for quick filter
+    document.getElementById('qYear').value = d.getFullYear();
+    document.getElementById('qMonth').value = d.getMonth(); // 0-indexed (Jan=0)
+
+    // Set Default Date Range (Current Month)
+    setDatesFromMonth(d.getFullYear(), d.getMonth());
+
+    function formatMoney(n) { return parseFloat(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+    function formatQty(n) { return parseFloat(n).toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:2}); }
+
+    // --- QUICK FILTER LOGIC ---
+    function applyQuickDate() {
+        const y = parseInt(document.getElementById('qYear').value);
+        const m = parseInt(document.getElementById('qMonth').value);
+        setDatesFromMonth(y, m);
+    }
+
+    function setDatesFromMonth(year, month) {
+        // First Day
+        const firstDay = new Date(year, month, 1);
+        // Last Day (Day 0 of next month is last day of current)
+        const lastDay = new Date(year, month + 1, 0);
+
+        // Format YYYY-MM-DD
+        const fmt = (date) => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
+
+        document.getElementById('startDate').value = fmt(firstDay);
+        document.getElementById('endDate').value = fmt(lastDay);
+    }
+
+    // --- REPORT GENERATION ---
+    document.getElementById('filterForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        
+        document.getElementById('loading').classList.remove('d-none');
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        try {
+            const res = await fetch('/api/product_performance_report', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ start: start, end: end })
+            });
+            const data = await res.json();
+
+            if(!data.success) {
+                alert("Error: " + data.error);
+                return;
+            }
+
+            if(data.report.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-4">No data found.</td></tr>';
+                ['sumPur','sumRet','sumNet','sumSold','sumVal','sumHand'].forEach(id => document.getElementById(id).innerText = '-');
+            } else {
+                let html = '';
+                let tPur = 0, tRet = 0, tNet = 0, tSold = 0, tVal = 0, tHand = 0;
+
+                data.report.forEach(row => {
+                    // Filter: Hide rows with absolutely no activity or stock
+                    if(row.pur_qty === 0 && row.ret_qty === 0 && row.sold_qty === 0 && row.on_hand === 0) return;
+
+                    tPur += row.pur_qty;
+                    tRet += row.ret_qty;
+                    tNet += row.net_pur;
+                    tSold += row.sold_qty;
+                    tVal += row.sales_val;
+                    tHand += row.on_hand;
+
+                    html += `
+                        <tr>
+                            <td class="font-monospace small">${row.barcode}</td>
+                            <td class="font-monospace small">${row.ref}</td>
+                            <td class="fw-bold text-truncate" style="max-width: 250px;" title="${row.name}">${row.name}</td>
+                            <td class="small text-muted text-truncate" style="max-width: 150px;">${row.vendor}</td>
+                            <td class="text-end">${formatMoney(row.cost)}</td>
+                            <td class="text-end">${formatMoney(row.price)}</td>
+                            
+                            <td class="text-end bg-light">${formatQty(row.pur_qty)}</td>
+                            <td class="text-end bg-light text-danger">${formatQty(row.ret_qty)}</td>
+                            <td class="text-end bg-light fw-bold">${formatQty(row.net_pur)}</td>
+                            
+                            <td class="text-end bg-light">${formatQty(row.sold_qty)}</td>
+                            <td class="text-end bg-light fw-bold text-primary">${formatMoney(row.sales_val)}</td>
+                            
+                            <td class="text-end bg-light fw-bold text-success">${formatQty(row.on_hand)}</td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html || '<tr><td colspan="12" class="text-center text-muted py-4">No active products found.</td></tr>';
+
+                document.getElementById('sumPur').innerText = formatQty(tPur);
+                document.getElementById('sumRet').innerText = formatQty(tRet);
+                document.getElementById('sumNet').innerText = formatQty(tNet);
+                document.getElementById('sumSold').innerText = formatQty(tSold);
+                document.getElementById('sumVal').innerText = formatMoney(tVal);
+                document.getElementById('sumHand').innerText = formatQty(tHand);
+            }
+
+        } catch(err) {
+            console.error(err);
+            alert("Connection Failed");
+        } finally {
+            document.getElementById('loading').classList.add('d-none');
+        }
+    });
+
+    function exportToExcel() {
+        const table = document.getElementById("perfTable");
+        const workbook = XLSX.utils.table_to_book(table, {sheet: "Performance"});
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        XLSX.writeFile(workbook, `Product_Performance_${start}_to_${end}.xlsx`);
+    }
+</script>
+</body>
+</html>

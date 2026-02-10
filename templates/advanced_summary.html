@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Advanced Sales Summary</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; padding: 20px; font-family: 'Segoe UI', sans-serif; }
+        
+        /* --- SELECTION STYLES --- */
+        .invoice-checkbox { width: 18px; height: 18px; cursor: pointer; }
+        .selection-box { max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; }
+
+        /* --- REPORT UI --- */
+        .summary-card { border: none; border-radius: 8px; color: white; transition: transform 0.2s; min-height: 90px; }
+        .bg-gross { background: linear-gradient(135deg, #4e54c8, #8f94fb); }
+        .bg-disc { background: linear-gradient(135deg, #11998e, #38ef7d); }
+        .bg-ret { background: linear-gradient(135deg, #cb2d3e, #ef473a); }
+        .bg-net { background: linear-gradient(135deg, #56ab2f, #a8e063); color: #333 !important; }
+        .card-custom { background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding: 15px; border: none; margin-bottom: 15px; }
+        
+        .payment-bar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-around; align-items: center; }
+        .pay-item { text-align: center; padding: 5px 15px; border-right: 1px solid #eee; flex: 1; }
+        .pay-label { font-size: 0.75rem; text-transform: uppercase; color: #777; font-weight: 700; }
+        .pay-val { font-size: 1.1rem; font-weight: bold; color: #333; }
+        
+        .dept-list { list-style: none; padding: 0; margin: 0; }
+        .dept-list li { padding: 4px 10px; border-bottom: 1px dashed #f5f5f5; display: flex; justify-content: space-between; font-size: 0.85rem; }
+        .dept-header { padding: 8px 10px; font-weight: bold; border-bottom: 1px solid #eee; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.5px; }
+        .dh-sales { background-color: #e3f2fd; color: #0d6efd; }
+        .dh-disc { background-color: #e8f5e9; color: #198754; }
+        .dh-due { background-color: #fbecec; color: #dc3545; }
+        .dh-ret { background-color: #fff3cd; color: #ffc107; }
+
+        .table th { background-color: #343a40 !important; color: white; font-weight: 500; font-size: 0.8rem; padding: 8px; }
+        .table td { font-size: 0.8rem; padding: 4px 6px; vertical-align: middle; }
+        td:nth-child(n+3), th:nth-child(n+3) { text-align: right; }
+        
+        /* Total Row Styling */
+        .final-total-row td { background-color: #343a40 !important; color: white !important; font-weight: bold; border-top: 2px solid #000; }
+        
+        thead { position: sticky; top: 0; z-index: 5; }
+
+        /* --- PRINT STYLES --- */
+        @media print {
+            @page { size: landscape; margin: 5mm; }
+            
+            body { 
+                background-color: white !important; 
+                padding: 0 !important; margin: 0 !important; 
+                -webkit-print-color-adjust: exact !important; 
+                print-color-adjust: exact !important;
+                zoom: 90%; 
+            }
+
+            /* HIDE Interface Elements */
+            #selectionPanel, #loadForm, #gridContainer, #loading, .btn, a.btn, .no-print { display: none !important; }
+            .d-flex.justify-content-between.align-items-center.mb-3 { display: none !important; }
+
+            /* FORCE Report Visibility */
+            .container-fluid { width: 100% !important; max-width: none !important; padding: 0 !important; }
+            #reportSection { display: block !important; width: 100% !important; margin: 0 !important; }
+
+            /* CARD LAYOUT */
+            .card-custom {
+                box-shadow: none !important;
+                border: 1px solid #ccc !important;
+                padding: 10px !important;
+                margin-bottom: 10px !important;
+                break-inside: auto !important; 
+            }
+
+            .summary-card, .pay-item, .dept-card {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+
+            .row { display: flex !important; flex-wrap: nowrap !important; }
+            .col-md-3 { width: 25% !important; flex: 0 0 25% !important; }
+            .col-6 { width: 25% !important; }
+
+            .table-responsive { overflow: visible !important; }
+            .table th { background-color: #333 !important; color: white !important; }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+            thead { display: table-header-group; }
+            
+            .d-print-block { display: block !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid" style="max-width: 1600px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <a href="/reports" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i> Back to Reports</a>
+            <h4 class="d-inline-block align-middle text-secondary ms-2 m-0">Advanced Sales Summary</h4>
+        </div>
+    </div>
+
+    <div class="card-custom mb-3" id="selectionPanel">
+        <h6 class="text-muted fw-bold mb-3"><i class="fas fa-filter me-1"></i> 1. Select Data Range</h6>
+        <form id="loadForm" class="row g-2 align-items-end mb-3">
+            <div class="col-md-2">
+                <label class="small fw-bold text-muted">From</label>
+                <input type="date" id="startDate" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+                <label class="small fw-bold text-muted">To</label>
+                <input type="date" id="endDate" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">
+                    <i class="fas fa-download me-1"></i> Load Invoices
+                </button>
+            </div>
+        </form>
+
+        <div id="gridContainer" class="d-none">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="text-muted fw-bold m-0"><i class="fas fa-check-square me-1"></i> 2. Select Invoices to Summarize</h6>
+                <div>
+                    <span class="badge bg-secondary me-2" id="selCount">0 Selected</span>
+                    <button class="btn btn-success btn-sm fw-bold" onclick="generateSummary()">
+                        <i class="fas fa-chart-pie me-1"></i> Generate Dashboard
+                    </button>
+                </div>
+            </div>
+            <div class="selection-box table-responsive">
+                <table class="table table-hover table-bordered mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-center" style="width: 50px;"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
+                            <th>Date</th>
+                            <th>Number</th>
+                            <th>Customer</th>
+                            <th>Type</th>
+                            <th class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invoiceTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="reportSection" class="d-none">
+        
+        <div class="text-center mb-3 d-none d-print-block">
+            <h3>Sales Summary Report</h3>
+            <p class="text-muted small" id="printDateRange"></p>
+        </div>
+
+        <div class="row g-2 mb-3">
+            <div class="col-md-3 col-6"><div class="card summary-card bg-gross p-2 ps-3"><span class="small opacity-75 text-uppercase">Gross Sales</span><h4 class="fw-bold mb-0" id="valGross">0.00</h4></div></div>
+            <div class="col-md-3 col-6"><div class="card summary-card bg-disc p-2 ps-3"><span class="small opacity-75 text-uppercase">Discounts</span><h4 class="fw-bold mb-0" id="valDisc">0.00</h4></div></div>
+            <div class="col-md-3 col-6"><div class="card summary-card bg-ret p-2 ps-3"><span class="small opacity-75 text-uppercase">Returns</span><h4 class="fw-bold mb-0" id="valRet">0.00</h4></div></div>
+            <div class="col-md-3 col-6"><div class="card summary-card bg-net p-2 ps-3"><span class="small opacity-75 text-uppercase">Net Sales</span><h4 class="fw-bold mb-0" id="valNet">0.00</h4></div></div>
+        </div>
+
+        <div class="card-custom mb-3 py-2"><div class="payment-bar" id="paymentContainer"></div></div>
+
+        <div class="row g-2 mb-3">
+            <div class="col-md-3"><div class="card-custom dept-card p-0"><div class="dept-header dh-sales">Dept. Net Sales</div><ul class="dept-list" id="listSales"></ul></div></div>
+            <div class="col-md-3"><div class="card-custom dept-card p-0"><div class="dept-header dh-disc">Dept. Discounts</div><ul class="dept-list" id="listDisc"></ul></div></div>
+            <div class="col-md-3"><div class="card-custom dept-card p-0"><div class="dept-header dh-due">Dept. Due (Credit)</div><ul class="dept-list" id="listDue"></ul></div></div>
+            <div class="col-md-3"><div class="card-custom dept-card p-0"><div class="dept-header dh-ret">Dept. Returns</div><ul class="dept-list" id="listRet"></ul></div></div>
+        </div>
+
+        <div class="card-custom">
+            <div class="d-flex justify-content-between align-items-center mb-2 no-print">
+                <h6 class="text-muted fw-bold m-0 small text-uppercase">Selected Transaction Details <small class="fw-normal">(Click headers to sort)</small></h6>
+                <button class="btn btn-sm btn-dark" id="printBtn" onclick="window.print()"><i class="fas fa-print me-1"></i> Print Report</button>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered table-striped m-0" id="resultTable">
+                    <thead id="resultHead"></thead>
+                    <tbody id="resultBody"></tbody>
+                    </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div id="loading" class="position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-75 d-none d-flex justify-content-center align-items-center" style="z-index: 2000;">
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 fw-bold text-primary">Processing...</p>
+    </div>
+</div>
+
+<script>
+    const d = new Date();
+    document.getElementById('startDate').valueAsDate = new Date(d.getFullYear(), d.getMonth(), 1);
+    document.getElementById('endDate').valueAsDate = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+
+    function formatMoney(n) { return (typeof n === 'number') ? n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : n; }
+
+    document.getElementById('loadForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        
+        document.getElementById('loading').classList.remove('d-none');
+        document.getElementById('reportSection').classList.add('d-none'); 
+        
+        try {
+            const res = await fetch('/api/fetch_invoices_for_selection', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ start: start, end: end })
+            });
+            const data = await res.json();
+
+            if(!data.success) { alert("Error: " + data.error); return; }
+
+            const tbody = document.getElementById('invoiceTableBody');
+            tbody.innerHTML = '';
+            
+            if(data.invoices.length === 0) {
+                alert("No invoices found in this range.");
+                document.getElementById('gridContainer').classList.add('d-none');
+            } else {
+                data.invoices.forEach(inv => {
+                    const isRet = inv.type === 'out_refund';
+                    const colorClass = isRet ? 'text-danger' : 'text-primary';
+                    const sign = isRet ? '-' : '';
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="text-center">
+                                <input type="checkbox" class="invoice-checkbox form-check-input" value="${inv.id}">
+                            </td>
+                            <td>${inv.date}</td>
+                            <td class="fw-bold">${inv.number}</td>
+                            <td>${inv.partner}</td>
+                            <td class="small text-muted">${isRet ? 'Credit Note' : 'Invoice'}</td>
+                            <td class="text-end fw-bold ${colorClass}">${sign}${formatMoney(inv.amount)}</td>
+                        </tr>
+                    `;
+                });
+                document.getElementById('gridContainer').classList.remove('d-none');
+                updateCount();
+            }
+        } catch(e) { alert("Connection Error"); } 
+        finally { document.getElementById('loading').classList.add('d-none'); }
+    });
+
+    function toggleAll(source) {
+        document.querySelectorAll('.invoice-checkbox').forEach(c => c.checked = source.checked);
+        updateCount();
+    }
+    document.getElementById('invoiceTableBody').addEventListener('change', updateCount);
+    function updateCount() {
+        const count = document.querySelectorAll('.invoice-checkbox:checked').length;
+        document.getElementById('selCount').innerText = count + " Selected";
+    }
+
+    async function generateSummary() {
+        const selectedIds = Array.from(document.querySelectorAll('.invoice-checkbox:checked')).map(cb => parseInt(cb.value));
+        if(selectedIds.length === 0) return alert("Please select at least one invoice.");
+
+        document.getElementById('loading').classList.remove('d-none');
+        try {
+            const res = await fetch('/api/generate_summary_from_ids', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ move_ids: selectedIds })
+            });
+            const data = await res.json();
+
+            if(!data.success) { alert("Error: " + data.error); return; }
+
+            renderDashboard(data.result);
+
+        } catch(e) { alert("Generation Failed"); console.error(e); } 
+        finally { document.getElementById('loading').classList.add('d-none'); }
+    }
+
+    function renderDashboard(data) {
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        document.getElementById('printDateRange').innerText = `Period: ${start} to ${end}`;
+
+        const s = data.summary;
+        document.getElementById('valGross').innerText = formatMoney(s.gross_sales);
+        document.getElementById('valDisc').innerText = formatMoney(s.total_discount);
+        document.getElementById('valRet').innerText = formatMoney(s.total_returns);
+        document.getElementById('valNet').innerText = formatMoney(s.net_sales);
+
+        const pContainer = document.getElementById('paymentContainer');
+        pContainer.innerHTML = '';
+        let totalRec = 0;
+        for (const [method, val] of Object.entries(data.payment_summary)) {
+            totalRec += val;
+            pContainer.innerHTML += `<div class="pay-item"><div class="pay-label">${method}</div><div class="pay-val">${formatMoney(val)}</div></div>`;
+        }
+        pContainer.innerHTML += `<div class="pay-item"><div class="pay-label text-success">Total Collected</div><div class="pay-val total">${formatMoney(totalRec)}</div></div>`;
+        pContainer.innerHTML += `<div class="pay-item"><div class="pay-label text-danger">Outstanding Due</div><div class="pay-val due">${formatMoney(data.total_due)}</div></div>`;
+
+        function fillList(id, data, cls) {
+            const el = document.getElementById(id); el.innerHTML = '';
+            for(const [k,v] of Object.entries(data)) if(v!==0) el.innerHTML += `<li><span>${k}</span><span class="${cls}">${formatMoney(v)}</span></li>`;
+        }
+        fillList('listSales', data.dept_sales, 'text-primary');
+        fillList('listDisc', data.dept_discount, 'text-success');
+        fillList('listDue', data.dept_due, 'text-danger');
+        fillList('listRet', data.dept_returns, 'text-warning');
+
+        const { columns, data: rows, totals } = data;
+        const thead = document.getElementById('resultHead');
+        const tbody = document.getElementById('resultBody');
+        thead.innerHTML = ''; tbody.innerHTML = ''; 
+
+        // Headers
+        let hRow = '<tr>';
+        columns.forEach((col, index) => {
+            hRow += `<th onclick="sortTable(${index})">${col} <i class="fas fa-sort text-muted small ms-1 opacity-25"></i></th>`;
+        });
+        thead.innerHTML = hRow + '</tr>';
+
+        // Body
+        rows.forEach(row => {
+            let tr = '<tr>';
+            columns.forEach(col => {
+                let val = row[col];
+                if (['Sales Value','Due','Return Value','Discount'].includes(col)) {
+                    val = formatMoney(val);
+                    if (col === 'Due' && row[col] > 0) val = `<span class="fw-bold text-danger">${val}</span>`;
+                }
+                tr += `<td>${val}</td>`;
+            });
+            tbody.innerHTML += tr + '</tr>';
+        });
+
+        // Totals (APPENDED TO BODY NOW)
+        let fRow = '<tr class="final-total-row">';
+        columns.forEach(col => {
+            let val = totals[col];
+            if (typeof val === 'number') val = formatMoney(val);
+            if(col === columns[0]) val = "TOTALS";
+            fRow += `<td>${val}</td>`;
+        });
+        tbody.innerHTML += fRow + '</tr>';
+
+        document.getElementById('reportSection').classList.remove('d-none');
+        document.getElementById('reportSection').scrollIntoView({behavior: 'smooth'});
+    }
+
+    // --- SORTING (Keep Total Row at Bottom) ---
+    let currentSort = { column: -1, direction: 'asc' };
+    window.sortTable = function(colIndex) {
+        const tbody = document.getElementById("resultBody");
+        const rows = Array.from(tbody.rows);
+        
+        // Separate Data Rows and Total Row
+        const dataRows = rows.filter(r => !r.classList.contains('final-total-row'));
+        const totalRow = rows.find(r => r.classList.contains('final-total-row'));
+
+        let dir = (currentSort.column === colIndex && currentSort.direction === 'asc') ? 'desc' : 'asc';
+        currentSort = { column: colIndex, direction: dir };
+
+        dataRows.sort((a, b) => {
+            let x = a.getElementsByTagName("TD")[colIndex].innerText.trim().replace(/,/g, "");
+            let y = b.getElementsByTagName("TD")[colIndex].innerText.trim().replace(/,/g, "");
+            let xNum = parseFloat(x); let yNum = parseFloat(y);
+            return (!isNaN(xNum) && !isNaN(yNum)) ? (dir === 'asc' ? xNum - yNum : yNum - xNum) : (dir === 'asc' ? x.localeCompare(y) : y.localeCompare(x));
+        });
+
+        tbody.innerHTML = "";
+        dataRows.forEach(row => tbody.appendChild(row));
+        
+        // Append Total Row Last
+        if(totalRow) tbody.appendChild(totalRow);
+        
+        document.querySelectorAll("#resultHead th i").forEach(h => h.className = "fas fa-sort text-muted small ms-1 opacity-25");
+        document.querySelectorAll("#resultHead th")[colIndex].querySelector("i").className = dir === 'asc' ? "fas fa-sort-up ms-1" : "fas fa-sort-down ms-1";
+    }
+</script>
+</body>
+</html>

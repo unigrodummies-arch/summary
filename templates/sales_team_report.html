@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sales Team Report</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { background-color: #f4f6f9; padding: 20px; font-family: 'Segoe UI', sans-serif; }
+        .card-custom { background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding: 15px; border: none; }
+        th { font-size: 0.8rem; white-space: nowrap; }
+        td { font-size: 0.8rem; vertical-align: middle; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid" style="max-width: 1800px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <a href="/reports" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i> Back</a>
+            <h4 class="d-inline-block align-middle text-secondary ms-2 m-0">Sales Team & Product Report</h4>
+        </div>
+        <button class="btn btn-success btn-sm fw-bold" onclick="exportToExcel()">
+            <i class="fas fa-file-excel me-1"></i> Export Excel
+        </button>
+    </div>
+
+    <div class="card-custom mb-3">
+        <form id="filterForm" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="small fw-bold text-muted">Sales Team</label>
+                <select id="teamSelect" class="form-select form-select-sm">
+                    <option value="">All Teams</option>
+                    </select>
+            </div>
+            
+            <div class="col-md-2">
+                <label class="small fw-bold text-muted">Start Date</label>
+                <input type="date" id="startDate" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+                <label class="small fw-bold text-muted">End Date</label>
+                <input type="date" id="endDate" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">
+                    <i class="fas fa-search me-1"></i> Generate
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card-custom">
+        <div class="table-responsive" style="max-height: 80vh;">
+            <table class="table table-hover table-bordered table-striped mb-0 table-sm" id="reportTable">
+                <thead class="table-dark" style="position: sticky; top: 0; z-index: 10;">
+                    <tr>
+                        <th>Sales Team</th>
+                        <th>Barcode</th>
+                        <th>Int. Ref</th>
+                        <th>Category</th>
+                        <th>Product Name</th>
+                        <th>Vendor</th>
+                        <th class="text-end bg-primary text-white">Net Qty</th>
+                        <th class="text-end bg-success text-white">Net Amount</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="8" class="text-center text-muted py-5">Set date range and click Generate</td></tr>
+                </tbody>
+                <tfoot class="table-secondary fw-bold" style="position: sticky; bottom: 0;">
+                    <tr>
+                        <td colspan="6" class="text-end">TOTALS:</td>
+                        <td class="text-end" id="sumQty">-</td>
+                        <td class="text-end" id="sumVal">-</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<div id="loading" class="position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-75 d-none d-flex justify-content-center align-items-center" style="z-index: 2000;">
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 fw-bold text-primary">Processing Sales Data...</p>
+    </div>
+</div>
+
+<script>
+    const d = new Date();
+    document.getElementById('startDate').valueAsDate = new Date(d.getFullYear(), d.getMonth(), 1);
+    document.getElementById('endDate').valueAsDate = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+
+    // Initialize Page: Load Teams
+    window.onload = async function() {
+        try {
+            const res = await fetch('/api/get_sales_teams', {method: 'POST'});
+            const data = await res.json();
+            if(data.success) {
+                const sel = document.getElementById('teamSelect');
+                data.teams.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.innerText = t.name;
+                    sel.appendChild(opt);
+                });
+            }
+        } catch(err) { console.error("Error loading teams", err); }
+    };
+
+    function formatMoney(n) { return parseFloat(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+    function formatQty(n) { return parseFloat(n).toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:2}); }
+
+    document.getElementById('filterForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        const teamId = document.getElementById('teamSelect').value;
+        
+        document.getElementById('loading').classList.remove('d-none');
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        try {
+            const res = await fetch('/api/sales_team_report', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ start: start, end: end, team_id: teamId })
+            });
+            const data = await res.json();
+
+            if(!data.success) {
+                alert("Error: " + data.error);
+                return;
+            }
+
+            if(data.report.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No data found.</td></tr>';
+                document.getElementById('sumQty').innerText = '-';
+                document.getElementById('sumVal').innerText = '-';
+            } else {
+                let html = '';
+                let tQty = 0, tVal = 0;
+
+                data.report.forEach(row => {
+                    tQty += row.qty;
+                    tVal += row.amount;
+
+                    html += `
+                        <tr>
+                            <td class="fw-bold text-primary small">${row.team}</td>
+                            <td class="font-monospace small">${row.barcode}</td>
+                            <td class="font-monospace small">${row.ref}</td>
+                            <td class="small">${row.category}</td>
+                            <td class="fw-bold text-truncate" style="max-width: 250px;" title="${row.product}">${row.product}</td>
+                            <td class="small text-muted text-truncate" style="max-width: 150px;">${row.vendor}</td>
+                            <td class="text-end fw-bold">${formatQty(row.qty)}</td>
+                            <td class="text-end fw-bold text-success">${formatMoney(row.amount)}</td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html;
+                document.getElementById('sumQty').innerText = formatQty(tQty);
+                document.getElementById('sumVal').innerText = formatMoney(tVal);
+            }
+
+        } catch(err) {
+            console.error(err);
+            alert("Connection Failed");
+        } finally {
+            document.getElementById('loading').classList.add('d-none');
+        }
+    });
+
+    function exportToExcel() {
+        const table = document.getElementById("reportTable");
+        const workbook = XLSX.utils.table_to_book(table, {sheet: "SalesTeamReport"});
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        XLSX.writeFile(workbook, `Sales_Team_Report_${start}_to_${end}.xlsx`);
+    }
+</script>
+</body>
+</html>

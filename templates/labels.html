@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Labels</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #f4f6f9; padding: 20px; font-family: 'Segoe UI', sans-serif; height: 100vh; overflow: hidden; }
+        .main-wrapper { display: flex; flex-direction: column; height: 100%; }
+        .content-area { flex: 1; display: flex; gap: 20px; overflow: hidden; margin-top: 15px; }
+        .panel-card { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+        .panel-header { padding: 15px 20px; border-bottom: 1px solid #eee; background: #fff; flex-shrink: 0; }
+        .grid-container { flex: 1; overflow-y: auto; padding: 0; }
+        .table-sticky th { position: sticky; top: 0; background: #f8f9fa; z-index: 10; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .btn-add { border-radius: 20px; font-size: 0.8rem; padding: 2px 10px; }
+        .search-box { position: relative; }
+        .search-box i { position: absolute; left: 10px; top: 10px; color: #aaa; }
+        .search-box input { padding-left: 35px; border-radius: 20px; }
+        .qty-input { width: 60px; text-align: center; border: 1px solid #ddd; border-radius: 5px; padding: 3px; }
+        .trash-btn { color: #dc3545; cursor: pointer; transition: 0.2s; }
+        .trash-btn:hover { color: #a71d2a; transform: scale(1.1); }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid main-wrapper">
+    
+    <div class="d-flex justify-content-between align-items-center flex-shrink-0">
+        <div>
+            <a href="/" class="btn btn-outline-secondary btn-sm me-2"><i class="fas fa-arrow-left"></i> Home</a>
+            <h4 class="d-inline-block align-middle text-secondary m-0">Label Print Queue</h4>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <button class="btn btn-warning btn-sm fw-bold shadow-sm" onclick="importFromOdoo()">
+                <i class="fas fa-cloud-download-alt me-1"></i> Import from Odoo
+            </button>
+
+            <form id="productForm" class="d-flex align-items-center bg-white p-1 rounded border shadow-sm">
+                <input type="file" id="productFile" class="form-control form-control-sm me-2" style="width: 200px;">
+                <button type="submit" class="btn btn-primary btn-sm fw-bold">
+                    <i class="fas fa-upload me-1"></i> Load File
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="content-area">
+        <div class="col-md-7 panel-card">
+            <div class="panel-header">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="m-0 fw-bold text-primary"><i class="fas fa-box me-2"></i>Available Products</h6>
+                    <span class="badge bg-light text-dark border" id="sourceCount">0 items</span>
+                </div>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search by name, ref, or barcode...">
+                </div>
+            </div>
+            
+            <div class="grid-container">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                    <thead class="table-sticky">
+                        <tr>
+                            <th>Barcode</th>
+                            <th>Product Name</th>
+                            <th>Int. Ref</th>
+                            <th class="text-end">Price</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sourceTable">
+                        <tr><td colspan="5" class="text-center text-muted py-4">Load a file or click Import from Odoo to start</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="col-md-5 panel-card border-success border-top border-3">
+            <div class="panel-header">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="m-0 fw-bold text-success"><i class="fas fa-tags me-2"></i>Print Queue</h6>
+                </div>
+                
+                <div class="d-flex">
+                    <select id="labelFileSelect" class="form-select form-select-sm me-2">
+                        <option value="" disabled selected>Select Label Design...</option>
+                    </select>
+                    <button class="btn btn-success btn-sm fw-bold text-nowrap" onclick="printLabels()">
+                        <i class="fas fa-print me-1"></i> Print Labels
+                    </button>
+                </div>
+            </div>
+            
+            <div class="grid-container bg-light">
+                <table class="table table-white table-sm mb-0 align-middle border-start">
+                    <thead class="table-sticky">
+                        <tr>
+                            <th>Barcode</th>
+                            <th style="width: 40%;">Item</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-center">Remove</th>
+                        </tr>
+                    </thead>
+                    <tbody id="queueTable"></tbody>
+                </table>
+            </div>
+            <div class="p-2 bg-white border-top text-end text-muted small">
+                Total Labels: <span id="totalLabels" class="fw-bold text-dark">0</span>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div id="loading" class="position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-75 d-none d-flex justify-content-center align-items-center" style="z-index: 2000;">
+    <div class="spinner-border text-primary" role="status"></div>
+    <span class="ms-2 fw-bold text-primary">Fetching from Odoo...</span>
+</div>
+
+<script>
+    let allProducts = [];
+
+    // Init: Load label files
+    async function loadLabelFiles() {
+        try {
+            const res = await fetch('/get_label_files');
+            const files = await res.json();
+            const select = document.getElementById('labelFileSelect');
+            if (files.length > 0) {
+                files.forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f;
+                    opt.innerText = f;
+                    select.appendChild(opt);
+                });
+                select.selectedIndex = 0;
+            } else {
+                const opt = document.createElement('option');
+                opt.innerText = "No .btw files found";
+                select.appendChild(opt);
+            }
+        } catch (e) { console.error("Error loading label files", e); }
+    }
+    loadLabelFiles();
+
+    // 1. Load Products from FILE
+    document.getElementById('productForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById('productFile');
+        if(!fileInput.files[0]) return alert("Please select a file");
+
+        const formData = new FormData();
+        formData.append('productFile', fileInput.files[0]);
+        toggleLoading(true);
+
+        try {
+            const res = await fetch('/load_products', { method: 'POST', body: formData });
+            const data = await res.json();
+            if(res.ok) {
+                allProducts = data.products;
+                renderSourceTable(allProducts);
+            } else alert("Error: " + data.error);
+        } catch(err) { alert("Connection Failed"); } 
+        finally { toggleLoading(false); }
+    });
+
+    // 2. Load Products from ODOO (ONE CLICK)
+    async function importFromOdoo() {
+        toggleLoading(true);
+        try {
+            // No payload needed, backend uses hardcoded credentials
+            const res = await fetch('/fetch_odoo_products', { method: 'POST' });
+            const data = await res.json();
+            
+            if(res.ok) {
+                allProducts = data.products;
+                renderSourceTable(allProducts);
+                // Optional: Alert success
+                // alert("Successfully loaded " + allProducts.length + " products from Odoo!");
+            } else {
+                alert("Odoo Error: " + data.error);
+            }
+        } catch(err) {
+            console.error(err);
+            alert("Failed to connect to Odoo.");
+        } finally {
+            toggleLoading(false);
+        }
+    }
+
+    // 3. Render Helper
+    function formatMoney(amount) {
+        if (!amount) return '0.00';
+        return parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function renderSourceTable(products) {
+        const tbody = document.getElementById('sourceTable');
+        document.getElementById('sourceCount').innerText = products.length + " items";
+        tbody.innerHTML = '';
+        
+        if(products.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No products found</td></tr>';
+            return;
+        }
+
+        // Limit rendering for performance (first 500)
+        products.slice(0, 500).forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="small font-monospace">${p.barcode || '-'}</td>
+                <td class="small fw-bold text-truncate" style="max-width: 150px;" title="${p.name}">${p.name}</td>
+                <td class="small text-muted">${p.ref}</td>
+                <td class="small text-end fw-bold">${formatMoney(p.price)}</td>
+                <td class="text-end">
+                    <button class="btn btn-primary btn-add" onclick="addToQueue('${p.barcode}', '${p.name.replace(/'/g, "\\'")}', '${p.ref}')">Select <i class="fas fa-chevron-right ms-1"></i></button>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // 4. Search
+    document.getElementById('searchInput').addEventListener('keyup', function(e) {
+        const term = e.target.value.toLowerCase();
+        const filtered = allProducts.filter(p => 
+            p.name.toLowerCase().includes(term) || String(p.barcode).toLowerCase().includes(term) || String(p.ref).toLowerCase().includes(term)
+        );
+        renderSourceTable(filtered);
+    });
+
+    // 5. Queue Logic
+    window.addToQueue = function(barcode, name, ref) {
+        const tbody = document.getElementById('queueTable');
+        const combinedName = ref ? `${name} (${ref})` : name;
+        
+        const existingRow = Array.from(tbody.rows).find(row => row.dataset.id === barcode);
+        if(existingRow) {
+            existingRow.style.backgroundColor = "#fff3cd";
+            setTimeout(() => existingRow.style.backgroundColor = "", 300);
+            const input = existingRow.querySelector('.qty-input');
+            input.value = parseInt(input.value) + 1;
+            updateTotal();
+            return;
+        }
+
+        const tr = document.createElement('tr');
+        tr.dataset.id = barcode;
+        tr.style.animation = "fadeIn 0.3s";
+        tr.innerHTML = `
+            <td class="small font-monospace text-dark">${barcode}</td>
+            <td class="small fw-bold text-truncate" style="max-width: 150px;" title="${combinedName}">${combinedName}</td>
+            <td class="text-center"><input type="number" class="qty-input" value="1" min="1" onchange="updateTotal()"></td>
+            <td class="text-center"><i class="fas fa-trash trash-btn" onclick="removeRow(this)"></i></td>`;
+        tbody.appendChild(tr);
+        updateTotal();
+    };
+
+    window.removeRow = function(btn) {
+        btn.closest('tr').remove();
+        updateTotal();
+    };
+
+    window.updateTotal = function() {
+        const inputs = document.querySelectorAll('.qty-input');
+        let total = 0;
+        inputs.forEach(inp => total += parseInt(inp.value || 0));
+        document.getElementById('totalLabels').innerText = total;
+    }
+
+    // 6. Print Action
+    window.printLabels = async function() {
+        const rows = document.querySelectorAll('#queueTable tr');
+        if(rows.length === 0) return alert("Queue is empty.");
+        
+        const filename = document.getElementById('labelFileSelect').value;
+        if(!filename) return alert("Please select a label file from the dropdown.");
+
+        const items = [];
+        rows.forEach(row => {
+            const barcode = row.dataset.id;
+            const name = row.cells[1].innerText;
+            const qty = row.querySelector('.qty-input').value;
+            items.push({ barcode, name, qty });
+        });
+
+        toggleLoading(true);
+        try {
+            const res = await fetch('/print_labels', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: items, filename: filename })
+            });
+            const result = await res.json();
+            if(res.ok) alert("Success: Data written and Bartender opening...");
+            else alert("Error: " + result.error);
+        } catch(err) { alert("Connection Error"); } 
+        finally { toggleLoading(false); }
+    }
+
+    function toggleLoading(show) {
+        const el = document.getElementById('loading');
+        if(show) el.classList.remove('d-none');
+        else el.classList.add('d-none');
+    }
+    
+    // Animation
+    const style = document.createElement('style');
+    style.innerHTML = `@keyframes fadeIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }`;
+    document.head.appendChild(style);
+</script>
+
+</body>
+</html>
