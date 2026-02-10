@@ -679,11 +679,4 @@ def parse_text_route(): return jsonify({'success': False})
 def open_browser(): webbrowser.open_new('http://localhost:2000')
 
 if __name__ == '__main__':
-    try:
-        from waitress import serve
-        Timer(1, open_browser).start()
-        print("Serving on http://0.0.0.0:2000")
-        serve(app, host='0.0.0.0', port=2000)
-    except Exception as e:
-        print(f"Startup Error: {e}")
-        input("Press Enter to close...")
+    app.run(debug=True)
