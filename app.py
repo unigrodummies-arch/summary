@@ -9,13 +9,7 @@ import traceback
 from threading import Timer
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 
-# Try importing waitress
-try:
-    from waitress import serve
-except ImportError:
-    print("ERROR: 'waitress' library is missing. Please run: pip install waitress")
-    input("Press Enter to exit...")
-    sys.exit(1)
+
 
 # --- 1. CONFIGURATION ---
 try:
@@ -44,7 +38,6 @@ try:
 except Exception as e:
     print("CRITICAL ERROR DURING CONFIGURATION:")
     traceback.print_exc()
-    input("Press Enter to exit...")
     sys.exit(1)
 
 # ==========================================
